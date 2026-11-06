@@ -10,17 +10,27 @@ import re
 import json
 import logging
 import subprocess
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from pathlib import Path
 from etl.config import config, ROOT
 
 logger = logging.getLogger("etl.staging")
 
 class StagingExtractor:
-    def __init__(self):
+    def __init__(self, dump_path: Optional[Path] = None, force_restore: bool = False):
         self.fixture_path = ROOT / "tests" / "phase1_2_3_1" / "fixtures" / "synthetic_multi_tenant_fixture.json"
         self.dump_sql_path = ROOT / "database" / "data_only.sql"
-        self.dump_path = ROOT / "database" / "inf_nffice_latest.dump"
+        self.force_restore = force_restore
+        
+        if dump_path:
+            self.dump_path = Path(dump_path)
+        else:
+            # Auto-detect newest .dump file in database directory
+            dump_files = list((ROOT / "database").glob("*.dump"))
+            if dump_files:
+                self.dump_path = max(dump_files, key=os.path.getmtime)
+            else:
+                self.dump_path = ROOT / "database" / "inf_nffice_latest.dump"
 
     def is_pg_available(self) -> bool:
         try:
@@ -42,15 +52,24 @@ class StagingExtractor:
         if self.is_pg_available():
             logger.info("Live PostgreSQL connection established. Extracting from PostgreSQL...")
             return self._extract_from_postgres()
+        elif self.dump_path.exists():
+            # Check if restore is needed (force_restore, sql missing, or dump is newer than sql)
+            should_restore = (
+                self.force_restore 
+                or not self.dump_sql_path.exists()
+                or (self.dump_path.stat().st_mtime > self.dump_sql_path.stat().st_mtime)
+            )
+            if should_restore:
+                logger.info(f"Database dump detected at {self.dump_path}. Extracting tables via pg_restore...")
+                self._ensure_dump_sql()
+
+            if self.dump_sql_path.exists():
+                logger.info(f"Extracting authentic production data from database dump at {self.dump_sql_path}...")
+                return self._extract_from_dump(self.dump_sql_path)
+            return self._extract_from_local_dataset()
         elif self.dump_sql_path.exists():
             logger.info(f"Extracting authentic production data from database dump at {self.dump_sql_path}...")
             return self._extract_from_dump(self.dump_sql_path)
-        elif self.dump_path.exists():
-            logger.info(f"Database dump found at {self.dump_path}. Extracting tables...")
-            self._ensure_dump_sql()
-            if self.dump_sql_path.exists():
-                return self._extract_from_dump(self.dump_sql_path)
-            return self._extract_from_local_dataset()
         else:
             logger.info("PostgreSQL offline and no dump found. Extracting from verified multi-tenant dataset...")
             return self._extract_from_local_dataset()
@@ -77,6 +96,7 @@ class StagingExtractor:
             str(self.dump_path)
         ]
         try:
+            logger.info(f"Running pg_restore from {self.dump_path} to {self.dump_sql_path}...")
             subprocess.run(cmd, check=True, capture_output=True)
             logger.info("Successfully generated data_only.sql from dump.")
         except Exception as e:
@@ -158,34 +178,70 @@ class StagingExtractor:
                         data[table] = []
         finally:
             conn.close()
+
         return data
 
     def _extract_from_local_dataset(self) -> Dict[str, List[Dict[str, Any]]]:
-        with open(self.fixture_path, "r", encoding="utf-8") as f:
-            raw = json.load(f)
+        data = {}
+        data["tenants"] = [
+            {"id": 1, "code": "TENANT-001", "name": "Tenant Alpha Corp", "status": "ACTIVE", "is_deleted": False},
+            {"id": 2, "code": "TENANT-002", "name": "Tenant Beta Logistics", "status": "ACTIVE", "is_deleted": False}
+        ]
 
-        data = {
-            "tenants": raw.get("tenants", []),
-            "users": raw.get("users", []),
-            "tenant_user_memberships": raw.get("tenant_user_memberships", []),
-            "departments": raw.get("departments", []),
-            "department_members": raw.get("department_members", []),
-            "audiences": raw.get("audiences", []),
-            "notices": raw.get("notices", []),
-        }
+        data["users"] = [
+            {"id": 101, "username": "alice.t1", "email": "alice@tenant1.com", "full_name": "Alice Wonderland", "status": "ACTIVE", "is_deleted": False},
+            {"id": 102, "username": "bob.t1", "email": "bob@tenant1.com", "full_name": "Bob Builder", "status": "ACTIVE", "is_deleted": False},
+            {"id": 103, "username": "charlie.t1", "email": "charlie@tenant1.com", "full_name": "Charlie Chaplin", "status": "ACTIVE", "is_deleted": False},
+            {"id": 201, "username": "david.t2", "email": "david@tenant2.com", "full_name": "David Beckham", "status": "ACTIVE", "is_deleted": False},
+            {"id": 202, "username": "eva.t2", "email": "eva@tenant2.com", "full_name": "Eva Green", "status": "ACTIVE", "is_deleted": False}
+        ]
+
+        data["tenant_user_memberships"] = [
+            {"id": 1, "tenant_id": 1, "user_id": 101, "role": "ADMIN", "status": "ACTIVE", "is_deleted": False},
+            {"id": 2, "tenant_id": 1, "user_id": 102, "role": "MEMBER", "status": "ACTIVE", "is_deleted": False},
+            {"id": 3, "tenant_id": 1, "user_id": 103, "role": "MEMBER", "status": "ACTIVE", "is_deleted": False},
+            {"id": 4, "tenant_id": 2, "user_id": 201, "role": "ADMIN", "status": "ACTIVE", "is_deleted": False},
+            {"id": 5, "tenant_id": 2, "user_id": 202, "role": "MEMBER", "status": "ACTIVE", "is_deleted": False}
+        ]
+
+        data["departments"] = [
+            {"id": 10, "tenant_id": 1, "code": "DEPT-T1-ENG", "name": "Phòng Kỹ thuật & Công nghệ AI", "status": "ACTIVE", "is_deleted": False},
+            {"id": 11, "tenant_id": 1, "code": "DEPT-T1-OPS", "name": "Phòng Vận hành & Hệ thống", "status": "ACTIVE", "is_deleted": False},
+            {"id": 20, "tenant_id": 2, "code": "DEPT-T2-LOG", "name": "Phòng Điều phối Kho bãi & Vận tải", "status": "ACTIVE", "is_deleted": False}
+        ]
+
+        data["department_members"] = [
+            {"id": 1, "department_id": 10, "user_id": 101, "role": "MANAGER", "is_primary": True, "status": "ACTIVE", "is_deleted": False},
+            {"id": 2, "department_id": 10, "user_id": 102, "role": "STAFF", "is_primary": True, "status": "ACTIVE", "is_deleted": False},
+            {"id": 3, "department_id": 11, "user_id": 103, "role": "STAFF", "is_primary": True, "status": "ACTIVE", "is_deleted": False},
+            {"id": 4, "department_id": 20, "user_id": 201, "role": "MANAGER", "is_primary": True, "status": "ACTIVE", "is_deleted": False},
+            {"id": 5, "department_id": 20, "user_id": 202, "role": "STAFF", "is_primary": True, "status": "ACTIVE", "is_deleted": False}
+        ]
+
+        data["audiences"] = [
+            {"id": 1, "tenant_id": 1, "name": "Toàn thể cán bộ nhân viên Tenant 1", "code": "AUD-T1-ALL", "is_system": True, "is_deleted": False},
+            {"id": 2, "tenant_id": 1, "name": "Đội ngũ kỹ thuật nòng cốt", "code": "AUD-T1-ENG", "is_system": False, "is_deleted": False},
+            {"id": 3, "tenant_id": 2, "name": "Toàn thể cán bộ nhân viên Tenant 2", "code": "AUD-T2-ALL", "is_system": True, "is_deleted": False}
+        ]
+
+        data["notices"] = [
+            {"id": 1, "tenant_id": 1, "title": "Kế hoạch nâng cấp hạ tầng Cloud AI quý 4", "notice_type": "technical", "priority": "high", "audience_id": 1, "created_by_user_id": 101, "is_published": True, "is_deleted": False},
+            {"id": 2, "tenant_id": 1, "title": "Quy định bảo mật khóa API và quyền truy cập database", "notice_type": "security", "priority": "urgent", "audience_id": 2, "created_by_user_id": 101, "is_published": True, "is_deleted": False},
+            {"id": 3, "tenant_id": 2, "title": "Lịch bảo dưỡng định kỳ đội xe vận tải tuần 45", "notice_type": "operational", "priority": "normal", "audience_id": 3, "created_by_user_id": 201, "is_published": True, "is_deleted": False}
+        ]
 
         data["asset_categories"] = [
-            {"id": 1, "code": "LAPTOP", "name": "Máy tính xách tay (Laptop)", "is_active": True},
-            {"id": 2, "code": "SERVER", "name": "Máy chủ & Thiết bị mạng", "is_active": True},
-            {"id": 3, "code": "OFFICE_FURNITURE", "name": "Nội thất văn phòng", "is_active": True},
-            {"id": 4, "code": "VEHICLE", "name": "Phương tiện vận tải", "is_active": True}
+            {"id": 1, "code": "CAT-LAPTOP", "name": "Máy tính xách tay & Máy trạm", "is_active": True},
+            {"id": 2, "code": "CAT-SERVER", "name": "Máy chủ & Thiết bị mạng", "is_active": True},
+            {"id": 3, "code": "CAT-FURNITURE", "name": "Bàn ghế & Nội thất văn phòng", "is_active": True},
+            {"id": 4, "code": "CAT-VEHICLE", "name": "Phương tiện vận tải & Xe công tác", "is_active": True}
         ]
 
         data["assets"] = [
             {
                 "id": 1001,
                 "asset_code": "AST-T1-LP-01",
-                "name": "MacBook Pro M3 Max 36GB",
+                "name": "MacBook Pro 16 M3 Max 64GB",
                 "category_id": 1,
                 "tenant_id": 1,
                 "assigned_user_id": 101,

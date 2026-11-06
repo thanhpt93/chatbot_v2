@@ -30,7 +30,7 @@ class TextEmbedder:
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         # E5 requires "passage: " prefix for documents
         prefixed = [f"passage: {t}" for t in texts]
-        embeddings = self.model.encode(prefixed, normalize_embeddings=True, show_progress_bar=False)
+        embeddings = self.model.encode(prefixed, batch_size=64, normalize_embeddings=True, show_progress_bar=False)
         return embeddings.tolist()
 
     def embed_query(self, query: str) -> List[float]:
