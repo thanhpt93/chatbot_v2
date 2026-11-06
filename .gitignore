@@ -13,6 +13,7 @@
 # Database raw dump directory
 database/*.dump*
 database/*.gz
+database/*.sql*
 
 # Vector DB physical local storage (prevents large vector index files)
 data/qdrant_storage/
