@@ -1,5 +1,5 @@
 """
-Diagnostic and Test script for vLLM Serving + Qwen2.5-7B-Instruct.
+Diagnostic and Test script for vLLM Serving + Qwen2.5-7B-Instruct-GPTQ-Int4.
 
 Usage:
   python scripts/test_vllm_connection.py
@@ -17,7 +17,7 @@ from etl.llm_client import LLMClient
 
 def main():
     print("=" * 65)
-    print("      VLLM SERVING & QWEN2.5-7B-INSTRUCT CONNECTION TEST       ")
+    print("  VLLM SERVING & QWEN2.5-7B-INSTRUCT-GPTQ-INT4 CONNECTION TEST  ")
     print("=" * 65)
     print(f"Target API Endpoint : {config.llm_api_base}")
     print(f"Target Model Name   : {config.llm_model_name}")
@@ -28,13 +28,13 @@ def main():
 
     if available:
         print("[SUCCESS] vLLM Docker server is ACTIVE and REACHABLE!")
-        print("Sending a warm-up prompt to Qwen2.5-7B-Instruct...")
+        print("Sending a warm-up prompt to Qwen2.5-7B-Instruct-GPTQ-Int4...")
         try:
             res = client.chat_completion(
                 messages=[{"role": "user", "content": "Xin chao, ban la ai va co the giup gi cho Groupware IQ NFFICE?"}],
                 max_tokens=100
             )
-            print("\nResponse from Qwen2.5-7B-Instruct:")
+            print("\nResponse from Qwen2.5-7B-Instruct-GPTQ-Int4:")
             print(res)
             print("-" * 65)
         except Exception as e:
@@ -44,7 +44,7 @@ def main():
         print(f"Cannot connect to {config.llm_api_base}.")
         print("\nTo start vLLM with Docker, do the following:")
         print("-----------------------------------------------------------------")
-        print("1. Open 'Docker Desktop' on Windows.")
+        print("1. Ensure Docker Desktop is running.")
         print("2. Run the quick launcher script:")
         print("   scripts\\start_vllm_docker.bat")
         print("   OR run via Docker Compose:")

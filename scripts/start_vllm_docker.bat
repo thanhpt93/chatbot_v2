@@ -1,11 +1,13 @@
 @echo off
 REM ================================================================
-REM Quick Launcher for vLLM with Qwen2.5-7B-Instruct using Docker
-REM Optimized for NVIDIA GeForce RTX 3060 (12GB VRAM)
+REM Quick Launcher for vLLM with Qwen2.5-7B-Instruct-GPTQ-Int4 (Docker)
+REM Highly Optimized for NVIDIA RTX 3060 (12GB VRAM):
+REM - Only ~5.5 GB VRAM utilized
+REM - Leaves 6.5 GB free VRAM for OS & smooth display
 REM ================================================================
 
 echo ================================================================
-echo    STARTING VLLM DOCKER CONTAINER FOR QWEN2.5-7B-INSTRUCT
+echo    STARTING VLLM DOCKER: Qwen2.5-7B-Instruct-GPTQ-Int4
 echo ================================================================
 
 REM Check if Docker is running
@@ -19,8 +21,8 @@ if %ERRORLEVEL% NEQ 0 (
 
 echo [INFO] Docker Desktop is running.
 echo [INFO] Launching vLLM container (vllm/vllm-openai:latest)...
-echo [INFO] GPU Memory Utilization: 85%% (~10.2 GB VRAM)
-echo [INFO] Model: Qwen/Qwen2.5-7B-Instruct
+echo [INFO] Model: Qwen/Qwen2.5-7B-Instruct-GPTQ-Int4
+echo [INFO] GPU Memory Utilization: 60%% (~7.2 GB VRAM ceiling, actual ~5.5 GB)
 echo ----------------------------------------------------------------
 
 docker run -d --name vllm-qwen ^
@@ -30,21 +32,20 @@ docker run -d --name vllm-qwen ^
   -v vllm_huggingface_cache:/root/.cache/huggingface ^
   --restart unless-stopped ^
   vllm/vllm-openai:latest ^
-  --model Qwen/Qwen2.5-7B-Instruct ^
+  Qwen/Qwen2.5-7B-Instruct-GPTQ-Int4 ^
   --host 0.0.0.0 ^
   --port 8000 ^
-  --gpu-memory-utilization 0.85 ^
+  --gpu-memory-utilization 0.60 ^
   --max-model-len 8192
 
 if %ERRORLEVEL% EQU 0 (
     echo.
-    echo [SUCCESS] Container 'vllm-qwen' has been started successfully!
+    echo [SUCCESS] Container 'vllm-qwen' has been started!
     echo Endpoint: http://localhost:8000/v1
-    echo To view logs in real-time, run: docker logs -f vllm-qwen
+    echo To follow logs: docker logs -f vllm-qwen
 ) else (
     echo.
-    echo [WARNING] Failed to start container via docker run.
-    echo Attempting via docker compose...
+    echo [WARNING] Attempting launch via docker compose...
     docker compose -f docker-compose.vllm.yml up -d
 )
 
