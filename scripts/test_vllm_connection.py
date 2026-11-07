@@ -27,7 +27,7 @@ def main():
     available = client.is_service_available()
 
     if available:
-        print("[SUCCESS] vLLM server is ACTIVE and REACHABLE!")
+        print("[SUCCESS] vLLM Docker server is ACTIVE and REACHABLE!")
         print("Sending a warm-up prompt to Qwen2.5-7B-Instruct...")
         try:
             res = client.chat_completion(
@@ -42,13 +42,15 @@ def main():
     else:
         print("[STATUS] vLLM server is currently OFFLINE / NOT RUNNING.")
         print(f"Cannot connect to {config.llm_api_base}.")
-        print("\nTo start vLLM inside WSL2 Ubuntu, run:")
+        print("\nTo start vLLM with Docker, do the following:")
         print("-----------------------------------------------------------------")
-        print("vllm serve Qwen/Qwen2.5-7B-Instruct \\")
-        print("  --host 0.0.0.0 \\")
-        print("  --port 8000 \\")
-        print("  --gpu-memory-utilization 0.85 \\")
-        print("  --max-model-len 8192")
+        print("1. Open 'Docker Desktop' on Windows.")
+        print("2. Run the quick launcher script:")
+        print("   scripts\\start_vllm_docker.bat")
+        print("   OR run via Docker Compose:")
+        print("   docker compose -f docker-compose.vllm.yml up -d")
+        print("3. Check download/startup progress:")
+        print("   docker logs -f vllm-qwen")
         print("-----------------------------------------------------------------")
 
     print("=" * 65)
