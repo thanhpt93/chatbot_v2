@@ -1,0 +1,57 @@
+"""
+Diagnostic and Test script for vLLM Serving + Qwen2.5-7B-Instruct.
+
+Usage:
+  python scripts/test_vllm_connection.py
+"""
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from etl.config import config
+from etl.llm_client import LLMClient
+
+def main():
+    print("=" * 65)
+    print("      VLLM SERVING & QWEN2.5-7B-INSTRUCT CONNECTION TEST       ")
+    print("=" * 65)
+    print(f"Target API Endpoint : {config.llm_api_base}")
+    print(f"Target Model Name   : {config.llm_model_name}")
+    print("-" * 65)
+
+    client = LLMClient()
+    available = client.is_service_available()
+
+    if available:
+        print("[SUCCESS] vLLM server is ACTIVE and REACHABLE!")
+        print("Sending a warm-up prompt to Qwen2.5-7B-Instruct...")
+        try:
+            res = client.chat_completion(
+                messages=[{"role": "user", "content": "Xin chao, ban la ai va co the giup gi cho Groupware IQ NFFICE?"}],
+                max_tokens=100
+            )
+            print("\nResponse from Qwen2.5-7B-Instruct:")
+            print(res)
+            print("-" * 65)
+        except Exception as e:
+            print(f"[ERROR] Failed to generate response: {e}")
+    else:
+        print("[STATUS] vLLM server is currently OFFLINE / NOT RUNNING.")
+        print(f"Cannot connect to {config.llm_api_base}.")
+        print("\nTo start vLLM inside WSL2 Ubuntu, run:")
+        print("-----------------------------------------------------------------")
+        print("vllm serve Qwen/Qwen2.5-7B-Instruct \\")
+        print("  --host 0.0.0.0 \\")
+        print("  --port 8000 \\")
+        print("  --gpu-memory-utilization 0.85 \\")
+        print("  --max-model-len 8192")
+        print("-----------------------------------------------------------------")
+
+    print("=" * 65)
+
+if __name__ == "__main__":
+    main()

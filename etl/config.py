@@ -40,4 +40,11 @@ class ETLConfig:
     max_delete_ratio: float = 0.05  # 5%
     max_delete_absolute: int = 100
 
+    # LLM Serving Configuration (vLLM OpenAI-Compatible API)
+    llm_api_base: str = os.getenv("LLM_API_BASE", "http://localhost:8000/v1")
+    llm_api_key: str = os.getenv("LLM_API_KEY", "EMPTY")
+    llm_model_name: str = os.getenv("LLM_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct")
+    llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
+    llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "1024"))
+
 config = ETLConfig()
