@@ -10,6 +10,7 @@ Usage:
 import sys
 import json
 import logging
+import unicodedata
 from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import urllib.parse
@@ -25,6 +26,13 @@ from etl.vector.retriever import MultiTenantRetriever
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("web.server")
 
+def remove_accents(input_str: str) -> str:
+    """Removes Vietnamese accents for robust fuzzy search."""
+    if not input_str:
+        return ""
+    nfkd_form = unicodedata.normalize('NFKD', input_str)
+    return "".join([c for c in nfkd_form if not unicodedata.combining(c)]).lower()
+
 # Load Graph Snapshot for offline graph retrieval
 GRAPH_SNAPSHOT_PATH = ROOT / "data" / "graph_export" / "graph_snapshot.json"
 graph_data = {"nodes": {}, "relationships": []}
@@ -35,6 +43,18 @@ if GRAPH_SNAPSHOT_PATH.exists():
             logger.info("Graph snapshot loaded for RAG context.")
     except Exception as e:
         logger.warning(f"Could not load graph snapshot: {e}")
+
+# Load User Full Names mapping (extracted from real attendance dump events)
+USER_NAMES_PATH = ROOT / "data" / "graph_export" / "user_full_names.json"
+user_full_names = {}
+if USER_NAMES_PATH.exists():
+    try:
+        with open(USER_NAMES_PATH, "r", encoding="utf-8") as f:
+            raw_map = json.load(f)
+            user_full_names = {int(k): v for k, v in raw_map.items()}
+            logger.info(f"Loaded {len(user_full_names)} user full names.")
+    except Exception as e:
+        logger.warning(f"Could not load user full names: {e}")
 
 # Build in-memory lookup indexes for fast graph traversal
 nodes = graph_data.get("nodes", {})
@@ -96,29 +116,55 @@ def extract_graph_facts(query: str, tenant_id: int) -> list:
     """Extracts relevant graph relations from graph snapshot based on semantic entity matching."""
     facts = []
     q_lower = query.lower()
+    q_no_accent = remove_accents(query)
     
-    # 1. Direct Entity Matching: Users (by email, username, prefix)
+    # 1. Direct Entity Matching: Users (by Full Name, Email, Username, or Prefix)
     matched_users = []
     for u in nodes.get("User", []):
+        u_id = u.get("id")
+        full_name = user_full_names.get(u_id, "")
+        fn_lower = full_name.lower()
+        fn_no_accent = remove_accents(full_name)
+
         email = str(u.get("email") or "").lower()
         username = str(u.get("username") or "").lower()
         email_prefix = email.split("@")[0] if "@" in email else ""
-        if (email and email in q_lower) or (username and username in q_lower) or (len(email_prefix) >= 4 and email_prefix in q_lower):
+
+        is_match = False
+        # Match by full name (vietnamese with or without accents)
+        if full_name and (fn_lower in q_lower or fn_no_accent in q_no_accent):
+            is_match = True
+        elif len(fn_no_accent) > 5 and any(word in q_no_accent.split() for word in fn_no_accent.split() if len(word) >= 4):
+            # Check individual full name parts if multi-word query matches
+            name_parts = fn_no_accent.split()
+            if len(name_parts) >= 2 and all(p in q_no_accent for p in name_parts[-2:]):
+                is_match = True
+        elif email and email in q_lower:
+            is_match = True
+        elif username and username in q_lower:
+            is_match = True
+        elif len(email_prefix) >= 4 and email_prefix in q_lower:
+            is_match = True
+
+        if is_match and u not in matched_users:
             matched_users.append(u)
     
     for u in matched_users[:3]:
-        u_info = f"Nhân viên {u.get('username')} (Email: {u.get('email')}, Trạng thái: {u.get('status')})"
+        full_name = user_full_names.get(u["id"])
+        name_str = f"'{full_name}' (Mã NV: {u.get('username')})" if full_name else f"Mã NV: {u.get('username')}"
+        u_info = f"Nhân viên {name_str} - Email: {u.get('email')}, Trạng thái: {u.get('status')}"
+        
         depts = user_depts.get(u["id"], [])
         if depts:
             dept_str = ", ".join([str(d.get("name") or d.get("code")) for d in depts])
-            u_info += f" thuộc phòng ban: {dept_str}."
+            u_info += f" thuộc phòng ban/team: {dept_str}."
         else:
             u_info += "."
         
         assigned = user_assets.get(u["id"], [])
         if assigned:
-            ast_str = "; ".join([f"{a.get('name') or a.get('model')} (Mã: {a.get('code')}, Serial: {a.get('serial_number')})" for a in assigned[:5]])
-            u_info += f" Đang được bàn giao tài sản/thiết bị: {ast_str}."
+            ast_str = "; ".join([f"{a.get('name') or a.get('model')} (Mã: {a.get('code') or a.get('asset_code') or 'N/A'}, Serial: {a.get('serial_number') or 'N/A'})" for a in assigned[:5]])
+            u_info += f" Đang được giao tài sản/thiết bị: {ast_str}."
         
         prjs = user_projects.get(u["id"], [])
         if prjs:
@@ -139,10 +185,15 @@ def extract_graph_facts(query: str, tenant_id: int) -> list:
         d_info = f"Phòng ban/bộ phận '{d.get('name')}' (Mã: {d.get('code')})"
         mgr = dept_managers.get(d["id"])
         if mgr:
-            d_info += f" - Trưởng phòng/Quản lý: {mgr.get('username')} ({mgr.get('email')})."
+            mgr_fn = user_full_names.get(mgr["id"])
+            mgr_name = f"{mgr_fn} ({mgr.get('username')})" if mgr_fn else mgr.get('username')
+            d_info += f" - Trưởng phòng/Quản lý: {mgr_name} ({mgr.get('email')})."
         members = dept_members.get(d["id"], [])
         if members:
-            sample_m = [f"{m.get('username')} ({m.get('email')})" for m in members[:10]]
+            sample_m = []
+            for m in members[:10]:
+                m_fn = user_full_names.get(m["id"])
+                sample_m.append(f"{m_fn} ({m.get('username')})" if m_fn else f"{m.get('username')}")
             d_info += f" Có tổng cộng {len(members)} thành viên. Danh sách thành viên mẫu: {', '.join(sample_m)}."
         facts.append(d_info)
 
@@ -151,7 +202,7 @@ def extract_graph_facts(query: str, tenant_id: int) -> list:
     for a in nodes.get("Asset", []):
         a_name = str(a.get("name") or "").lower()
         a_model = str(a.get("model") or "").lower()
-        a_code = str(a.get("code") or "").lower()
+        a_code = str(a.get("code") or a.get("asset_code") or "").lower()
         a_serial = str(a.get("serial_number") or "").lower()
         if (a_code and len(a_code) >= 3 and a_code in q_lower) or (a_serial and len(a_serial) >= 4 and a_serial in q_lower):
             matched_assets.append(a)
@@ -162,10 +213,12 @@ def extract_graph_facts(query: str, tenant_id: int) -> list:
                     break
     
     for a in matched_assets[:5]:
-        ast_info = f"Tài sản thiết bị: {a.get('name') or a.get('model')} (Mã: {a.get('code')}, Serial: {a.get('serial_number')}, Trạng thái: {a.get('status')})"
+        ast_info = f"Tài sản thiết bị: {a.get('name') or a.get('model')} (Mã: {a.get('code') or a.get('asset_code') or 'N/A'}, Serial: {a.get('serial_number') or 'N/A'}, Trạng thái: {a.get('status')})"
         holder = asset_users.get(a["id"])
         if holder:
-            ast_info += f" - Người được cấp/sử dụng: {holder.get('username')} ({holder.get('email')})."
+            h_fn = user_full_names.get(holder["id"])
+            h_name = f"{h_fn} ({holder.get('username')})" if h_fn else holder.get('username')
+            ast_info += f" - Người được cấp/sử dụng: {h_name} ({holder.get('email')})."
         d_loc = asset_depts.get(a["id"])
         if d_loc:
             ast_info += f" Vị trí: Phòng {d_loc.get('name')}."
@@ -253,6 +306,7 @@ def main():
     print("=" * 65)
     print(f"Local URL           : http://localhost:{args.port}")
     print(f"Graph Snapshot      : {len(graph_data.get('nodes', {}))} node types loaded")
+    print(f"User Full Names     : {len(user_full_names)} names loaded")
     print(f"LLM Serving Backend : {config.llm_api_base} ({config.llm_model_name})")
     print(f"Vector Database     : Qdrant Collection '{config.qdrant_collection}'")
     print("-" * 65)
