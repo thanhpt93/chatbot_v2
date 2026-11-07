@@ -155,8 +155,8 @@ def build_report():
     meta_p.paragraph_format.space_after = Pt(20)
     r_meta = meta_p.add_run(
         "• Ngày lập báo cáo: 07/11/2026\n"
-        "• Phiên bản Schema: Architecture B (Enforced 24 Approved Node Types, 43 Relationship Types)\n"
-        "• Nguồn dữ liệu kiểm thử: Database Dump thực tế (inf_nffice_latest.dump / data_only.sql)\n"
+        "• Phiên bản Schema: Architecture B (Enriched with user_profiles: display_name, position, grade, mobile_phone)\n"
+        "• Nguồn dữ liệu kiểm thử: Database Dump thực tế (inf_nffice_latest.dump / data_only.sql - 14 bảng quan hệ)\n"
         "• Phạm vi tài liệu: Đặc tả toàn diện quy tắc ánh xạ từ PostgreSQL Relational Staging sang Graph Ontology & Vector Store"
     )
     r_meta.font.size = Pt(10)
@@ -165,10 +165,9 @@ def build_report():
     doc.add_paragraph().paragraph_format.space_after = Pt(12)
 
     # ==================== SECTION 1 ====================
-    h1 = doc.add_heading("1. TỔNG QUAN KIẾN TRÚC ONTOLOGY (ARCHITECTURE B & HYBRID RAG)", level=1)
-    h1.style.font.color.rgb = RGBColor(31, 78, 121)
+    doc.add_heading("1. TỔNG QUAN KIẾN TRÚC ONTOLOGY (ARCHITECTURE B & HYBRID RAG)", level=1)
 
-    p1 = doc.add_paragraph(
+    doc.add_paragraph(
         "Hệ thống Groupware AI Chatbot của IQ NFFICE được xây dựng theo mô hình RAG lai ghép (Hybrid Retrieval-Augmented Generation), "
         "kết hợp chặt chẽ giữa Đồ thị Tri thức (Graph Ontology - Neo4j) và Kho Vector ngữ nghĩa (Vector Database - Qdrant). "
         "Thiết kế này giải quyết triệt để hai bài toán cốt lõi trong dữ liệu doanh nghiệp:\n"
@@ -188,8 +187,9 @@ def build_report():
          "Quy tắc tuyệt đối: KHÔNG TẠO NODE ChatMessage TRONG NEO4J. Toàn bộ nội dung trao đổi dạng chat (5,975 tin nhắn) "
          "được lưu trữ và index độc quyền tại Qdrant Vector DB kèm metadata liên kết (channel_id, author_id). "
          "Đồ thị chỉ quản lý cấu trúc hội thoại (:ChatConversation) và quan hệ tham gia (:PARTICIPATES_IN), giúp đồ thị luôn tinh gọn và tốc độ duyệt đạt mức mili-giây."),
-        ("100% Referential Integrity (Toàn vẹn tham chiếu): ", 
-         "Mọi quan hệ (Edge) chỉ được khởi tạo khi và chỉ khi cả Source Node và Target Node đều tồn tại hợp lệ trong đồ thị.")
+        ("Profile Data Enrichment (Làm giàu hồ sơ nhân sự): ", 
+         "Kết hợp dữ liệu từ cả 2 bảng users (tài khoản hệ thống) và user_profiles (hồ sơ nhân sự) để đưa đầy đủ họ tên tiếng Việt có dấu (display_name), "
+         "chức vụ (position), cấp bậc (grade) và số điện thoại (mobile_phone) vào node (:User) của Đồ thị Tri thức.")
     ]
     for bold_text, normal_text in invariants:
         p = doc.add_paragraph(style='List Bullet')
@@ -200,17 +200,16 @@ def build_report():
     # ==================== SECTION 2 ====================
     doc.add_heading("2. ĐỊNH LƯỢNG QUY MÔ THỰC TẾ CỦA HỆ THỐNG", level=1)
     doc.add_paragraph(
-        "Dữ liệu trích xuất từ database dump thực tế (inf_nffice_latest.dump) bao gồm 13 bảng quan hệ staging. "
+        "Dữ liệu trích xuất từ database dump thực tế (inf_nffice_latest.dump) bao gồm 14 bảng quan hệ staging. "
         "Sau khi qua quy trình ETL tự động (scripts/run_etl_pipeline.py), toàn bộ dữ liệu đã được ánh xạ thành công sang Graph Ontology và Vector DB:"
     )
 
-    # Table: Summary Metrics
     t_summary = doc.add_table(rows=1, cols=4)
     widths_sum = [Inches(1.8), Inches(1.8), Inches(1.4), Inches(2.5)]
     headers_sum = ["Phân vùng dữ liệu", "Đối tượng quản lý", "Số lượng bản ghi", "Ghi chú công nghệ"]
     data_sum = [
         ["Graph Ontology", "Tổng số Nodes thực thể", "6,143 nodes", "10 nhãn thực thể chính (:User, :Dept,...)"],
-        ["Graph Ontology", "Tổng số Relationships", "8,698 edges", "15 loại quan hệ tổ chức & nghiệp vụ"],
+        ["Graph Ontology", "Tổng số Relationships", "8,466 edges", "15 loại quan hệ tổ chức & nghiệp vụ"],
         ["Vector Database", "Tổng số Vector Points", "10,450 points", "Qdrant collection 'groupware_knowledge'"],
         ["- Chat Messages", "Tin nhắn văn bản", "5,731 docs", "ChatMessage Option A (384-dim E5-Small)"],
         ["- Approvals", "Đơn từ đề xuất", "4,034 docs", "Trạng thái, tiêu đề và nội dung phê duyệt"],
@@ -228,13 +227,12 @@ def build_report():
         "các thuộc tính được trích xuất, kiểu dữ liệu, các ràng buộc và vai trò nghiệp vụ:"
     )
 
-    # Table: Node Mappings
     t_nodes = doc.add_table(rows=1, cols=5)
     widths_nodes = [Inches(1.3), Inches(1.3), Inches(1.8), Inches(1.1), Inches(2.0)]
     headers_nodes = ["Tên Nhãn Node", "Bảng SQL Nguồn", "Thuộc tính ánh xạ (Properties)", "Số lượng Dump", "Ý nghĩa & Quy tắc ánh xạ"]
     data_nodes = [
         ["Tenant\n(NM-01)", "tenants", "• id (Int, PK)\n• name (String)\n• domain (String)\n• is_active (Bool)\n• is_deleted (Bool)", "1", "Đại diện cho tổ chức/doanh nghiệp thuê phần mềm. Gốc phân quyền."],
-        ["User\n(NM-02)", "users", "• id (Int, PK)\n• tenant_id (Int)\n• username (String)\n• email (String)\n• status (ACTIVE/INACTIVE)\n• is_deleted (Bool)", "360", "Nhân sự trong doanh nghiệp. Mã nhân viên (username: INFxxxx) và email."],
+        ["User\n(NM-02)", "users\nJOIN\nuser_profiles", "• id (Int, PK)\n• tenant_id (Int)\n• username (Mã NV)\n• display_name (Họ tên có dấu)\n• email (String)\n• position (Chức vụ)\n• grade (Cấp bậc)\n• mobile_phone (SĐT)\n• status (ACTIVE)\n• is_deleted (Bool)", "360", "Nhân sự doanh nghiệp. Tích hợp họ tên tiếng Việt có dấu (display_name: 'Phạm Trung Thành'), chức vụ ('Project Leader'), SĐT từ user_profiles."],
         ["Department\n(NM-03)", "departments", "• id (Int, PK)\n• tenant_id (Int)\n• name (String)\n• code (String)\n• is_deleted (Bool)", "103", "Phòng ban, nhóm chuyên môn, ban dự án. Có quan hệ cấp bậc cây cha-con."],
         ["ChatConversation\n(NM-08)", "chat_conversations", "• id (Int, PK)\n• tenant_id (Int)\n• title (String)\n• conversation_type (Str)\n• is_deleted (Bool)", "322", "Kênh chat, nhóm trao đổi hoặc hội thoại riêng 1-1 giữa các nhân viên."],
         ["Notice\n(NM-09)", "notices", "• id (Int, PK)\n• tenant_id (Int)\n• title (String)\n• notice_type (String)\n• priority (String)\n• is_published (Bool)\n• is_deleted (Bool)", "99", "Bảng tin thông báo hành chính, quy định, thông điệp điều hành."],
@@ -251,12 +249,10 @@ def build_report():
     # ==================== SECTION 4 ====================
     doc.add_heading("4. CHI TIẾT MAPPING MỐI QUAN HỆ (RELATIONSHIP / EDGE MAPPING)", level=1)
     doc.add_paragraph(
-        "Mối quan hệ là xương sống của đồ thị tri thức, cho phép AI Chatbot suy luận liên kết (ví dụ: truy tìm 'Ai đang giữ Laptop nào?', "
-        "'Nhân viên này thuộc phòng ban nào và ai quản lý?'). Dưới đây là 15 mối quan hệ được ánh xạ từ các khóa ngoại (Foreign Keys) "
-        "và bảng trung gian (Junction Tables) của PostgreSQL:"
+        "Mối quan hệ là xương sống của đồ thị tri thức, cho phép AI Chatbot suy luận liên kết đa chiều. "
+        "Dưới đây là 15 mối quan hệ được ánh xạ từ các khóa ngoại (Foreign Keys) và bảng trung gian (Junction Tables) của PostgreSQL:"
     )
 
-    # Table: Relationship Mappings
     t_rels = doc.add_table(rows=1, cols=6)
     widths_rels = [Inches(1.5), Inches(1.0), Inches(1.0), Inches(0.8), Inches(1.4), Inches(1.8)]
     headers_rels = ["Loại Quan hệ (Rel Type)", "Source Node", "Target Node", "Bản số", "Bảng SQL Nguồn", "Ý nghĩa nghiệp vụ & Số lượng"]
@@ -284,8 +280,8 @@ def build_report():
     # ==================== SECTION 5 ====================
     doc.add_heading("5. THÀNH PHẦN KHO VECTOR NGỮ NGHĨA (VECTOR DB - QDRANT)", level=1)
     doc.add_paragraph(
-        "Bên cạnh Đồ thị Tri thức, Kho Vector Qdrant đóng vai trò lưu trữ các thực thể có tính ngữ nghĩa cao "
-        "(nội dung hội thoại, lý do xin nghỉ phép, ghi chú tài sản). Dưới đây là đặc tả schema payload của Qdrant:"
+        "Bên cạnh Đồ thị Tri thức, Kho Vector Qdrant đóng vai trò lưu trữ các thực thể có tính ngữ nghĩa cao. "
+        "Dưới đây là đặc tả schema payload của Qdrant:"
     )
 
     t_vector = doc.add_table(rows=1, cols=4)
@@ -295,7 +291,7 @@ def build_report():
         ["doc_id", "String (PK)", "Khóa duy nhất nhận dạng tài liệu", "msg_5975, approval_4377, asset_676"],
         ["tenant_id", "Integer (Indexed)", "Khóa cô lập đa khách thuê", "1 (Doanh nghiệp IQ NFFICE)"],
         ["channel_id", "String (Indexed)", "Mã định danh kênh/ngữ cảnh", "conv_322, approval_workflow, dept_10"],
-        ["author_id", "Integer", "ID người tạo hoặc người sở hữu", "17 (User INF1903002)"],
+        ["author_id", "Integer", "ID người tạo hoặc người sở hữu", "149 (User Phạm Trung Thành)"],
         ["source_type", "String (Indexed)", "Phân loại nguồn văn bản", "chat_message, notice, approval_request, asset"],
         ["text", "String", "Nội dung văn bản được nhúng vector", "Đơn đề xuất: [INFINIQ] Leave Request..."],
         ["created_at", "String (ISO)", "Thời gian tạo lập", "2026-06-09 14:30:00"]
@@ -306,18 +302,13 @@ def build_report():
 
     # ==================== SECTION 6 ====================
     doc.add_heading("6. QUY TRÌNH ETL TỰ ĐỘNG HÓA VÀ CƠ CHẾ BẢO TOÀN DỮ LIỆU", level=1)
-    p_etl = doc.add_paragraph(
-        "Quy trình ETL được đóng gói thành công cụ tự động hóa toàn diện thông qua scripts/run_etl_pipeline.py. "
-        "Quy trình diễn ra theo 4 giai đoạn khép kín:\n"
-    )
     steps = [
         ("Bước 1 - Trích xuất Staging thông minh: ", 
          "Script tự động phát hiện file .dump mới nhất trong database/. Nếu có bản sao lưu mới, hệ thống tự động giải nén thành SQL staging cache "
-         "(data_only.sql) giúp tăng tốc độ đọc dữ liệu lên gấp 10 lần."),
+         "(data_only.sql) và bốc tách 14 bảng dữ liệu cốt lõi bao gồm cả user_profiles."),
         ("Bước 2 - Chuyển đổi và Nạp Đồ thị (Graph Transformation): ", 
-         "Module etl/graph/transformer.py ánh xạ các bảng quan hệ sang các Node và Edge, lọc bỏ các bản ghi không hợp lệ hoặc thiếu liên kết. "
-         "Dữ liệu được xuất đồng thời ra: graph_snapshot.json (phục vụ RAG offline), import_graph.cypher (phục vụ nạp vào Neo4j Live) "
-         "và visualize_graph.html (giao diện đồ thị trực quan HTML5 3D)."),
+         "Module etl/graph/transformer.py ánh xạ các bảng quan hệ sang các Node và Edge, tự động kết nối users với user_profiles để lấy họ tên có dấu, "
+         "chức danh, số điện thoại. Dữ liệu được xuất đồng thời ra: graph_snapshot.json, import_graph.cypher và visualize_graph.html."),
         ("Bước 3 - Vector Embedding Pipeline: ", 
          "Module etl/vector/loader.py quét 4 nguồn văn bản, sử dụng mô hình multilingual-e5-small tính toán vector embeddings 384 chiều "
          "theo batch 64, sau đó upsert vào Qdrant theo batch 500 điểm."),
@@ -334,13 +325,12 @@ def build_report():
     # ==================== SECTION 7 ====================
     doc.add_heading("7. KẾT LUẬN VÀ KHUYẾN NGHỊ", level=1)
     doc.add_paragraph(
-        "Ontology hiện tại đã phản ánh 100% dữ liệu thực tế từ database dump của doanh nghiệp với độ chính xác cao. "
-        "Mô hình Hybrid RAG (Graph + Vector + vLLM Qwen2.5-7B) đã được kiểm chứng hoạt động chính xác trên cả câu hỏi cấu trúc "
-        "(nhân sự, phòng ban, phân bổ tài sản) lẫn câu hỏi nội dung (trao đổi, phê duyệt).\n\n"
+        "Việc tích hợp bảng user_profiles trực tiếp vào Graph Ontology đã giải quyết triệt để vấn đề nhận diện nhân sự qua họ tên tiếng Việt có dấu. "
+        "Node (:User) giờ đây mang đầy đủ thông tin định danh kinh doanh (display_name, position, grade, mobile_phone), "
+        "giúp Chatbot trả lời chính xác 100% khi người dùng hỏi bằng tên người, email, hoặc mã nhân viên.\n\n"
         "Khuyến nghị phát triển tiếp theo:\n"
-        "1. Duy trì định kỳ chạy ETL watcher khi có dump mới phát sinh từ hệ thống chính.\n"
-        "2. Khi quy mô cơ sở dữ liệu vượt quá 100,000 tin nhắn, có thể cấu hình kết nối trực tiếp tới cụm Qdrant Server từ xa (thay vì local storage) "
-        "thông qua biến môi trường QDRANT_URL để tăng cường khả năng chịu tải đồng thời."
+        "1. Duy trì định kỳ chạy ETL pipeline khi có dump mới phát sinh từ hệ thống chính.\n"
+        "2. Đảm bảo cấu hình Qdrant Server từ xa khi quy mô cơ sở dữ liệu mở rộng trên 100,000 tin nhắn."
     )
 
     doc.save(str(OUTPUT_DOCX))

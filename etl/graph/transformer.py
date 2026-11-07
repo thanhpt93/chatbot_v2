@@ -3,6 +3,7 @@ Graph Transformer Module.
 Transforms staging relational tables into Architecture B Graph Nodes and Relationships.
 Enforces:
 - 24 approved Node types & 43 Relationship types (Docs 30, 31)
+- NM-02 (:User) enriched with :user_profiles (display_name, position, grade, mobile_phone)
 - NM-16 (:Asset), NM-17 (:AssetCategory)
 - RM-30 (:Asset)-[:ASSIGNED_TO]->(:User)
 - RM-31 (:Asset)-[:LOCATED_IN]->(:Department)
@@ -42,20 +43,38 @@ class GraphTransformer:
                 "is_deleted": t.get("is_deleted", False)
             })
 
-        # 2. Transform Users (NM-02) & Tenant Memberships
+        # 2. Transform Users (NM-02) & Tenant Memberships + Profile Enrichment
         user_tenants = {}
         for m in staging_data.get("tenant_user_memberships", []):
             user_tenants[m["user_id"]] = m.get("tenant_id", 1)
 
+        # Index user_profiles by user_id
+        profiles_by_user = {}
+        for p in staging_data.get("user_profiles", []):
+            uid = p.get("user_id")
+            if uid is not None:
+                profiles_by_user[int(uid)] = p
+
         for u in staging_data.get("users", []):
             u_id = u["id"]
             t_id = user_tenants.get(u_id, u.get("tenant_id", 1))
-            display_title = u.get("username") or u.get("email") or f"User {u_id}"
+            prof = profiles_by_user.get(u_id, {})
+            
+            # Enrich with official display_name from user_profiles
+            display_name = prof.get("display_name") or u.get("username", f"user_{u_id}")
+            position = prof.get("position") or prof.get("duty") or ""
+            grade = prof.get("grade") or ""
+            mobile_phone = prof.get("mobile_phone") or ""
+
             nodes["User"].append({
                 "id": u_id,
                 "tenant_id": t_id,
                 "username": u.get("username", f"user_{u_id}"),
+                "display_name": display_name,
                 "email": u.get("email", ""),
+                "position": position,
+                "grade": grade,
+                "mobile_phone": mobile_phone,
                 "status": "ACTIVE" if u.get("is_active", True) else "INACTIVE",
                 "is_deleted": u.get("is_deleted", False)
             })
@@ -120,33 +139,26 @@ class GraphTransformer:
             is_sys = a.get("is_system", a.get("tenant_id") is None)
             nodes["Audience"].append({
                 "id": a_id,
-                "tenant_id": t_id,
-                "name": a.get("name") or a.get("code") or f"Audience {a_id}",
-                "is_system": is_sys,
+                "tenant_id": t_id if t_id else 1,
+                "name": a.get("name") or f"Audience {a_id}",
+                "is_system": bool(is_sys),
                 "is_deleted": a.get("is_deleted", False)
             })
 
-        # 5. Transform Notices (NM-14)
+        # 5. Transform Notices (NM-09) & RM-20, RM-21
         for n in staging_data.get("notices", []):
             n_id = n["id"]
             author_id = n.get("created_by_user_id")
-            t_id = user_tenants.get(author_id, 1) if author_id else 1
+            t_id = n.get("tenant_id") or (user_tenants.get(author_id, 1) if author_id else 1)
             nodes["Notice"].append({
                 "id": n_id,
                 "tenant_id": t_id,
-                "title": n.get("title", f"Notice {n_id}"),
+                "title": n.get("title") or f"Notice {n_id}",
                 "notice_type": n.get("notice_type", "general"),
                 "priority": n.get("priority", "normal"),
-                "is_published": n.get("is_published", True),
+                "is_published": n.get("is_published", True) if n.get("published_at") else False,
                 "is_deleted": n.get("is_deleted", False)
             })
-            if "audience_id" in n and n["audience_id"] is not None:
-                relationships.append({
-                    "source_label": "Notice", "source_id": n_id,
-                    "rel_type": "TARGETS",
-                    "target_label": "Audience", "target_id": n["audience_id"],
-                    "tenant_id": t_id
-                })
             if author_id:
                 relationships.append({
                     "source_label": "Notice", "source_id": n_id,
@@ -154,17 +166,23 @@ class GraphTransformer:
                     "target_label": "User", "target_id": author_id,
                     "tenant_id": t_id
                 })
+            if "audience_id" in n and n["audience_id"] is not None:
+                relationships.append({
+                    "source_label": "Notice", "source_id": n_id,
+                    "rel_type": "TARGETS",
+                    "target_label": "Audience", "target_id": n["audience_id"],
+                    "tenant_id": t_id
+                })
 
-        # 6. Transform ChatConversations (NM-19: Topology only - ChatMessage Option A)
+        # 6. Transform Chat Conversations (NM-08) & Conversation Members
         for c in staging_data.get("chat_conversations", []):
             c_id = c["id"]
-            creator_id = c.get("created_by_user_id")
-            t_id = c.get("tenant_id") or (user_tenants.get(creator_id, 1) if creator_id else 1)
+            t_id = c.get("tenant_id", 1)
             nodes["ChatConversation"].append({
                 "id": c_id,
                 "tenant_id": t_id,
                 "title": c.get("title") or f"Conversation {c_id}",
-                "conversation_type": c.get("conversation_type") or c.get("channel_type", "group"),
+                "conversation_type": c.get("conversation_type", "direct"),
                 "is_deleted": c.get("is_deleted", False)
             })
             relationships.append({
@@ -173,24 +191,28 @@ class GraphTransformer:
                 "target_label": "Tenant", "target_id": t_id,
                 "tenant_id": t_id
             })
-            if creator_id:
+
+        for m in staging_data.get("chat_conversation_members", []):
+            c_id = m.get("conversation_id")
+            u_id = m.get("user_id")
+            t_id = m.get("tenant_id") or user_tenants.get(u_id, 1)
+            if c_id and u_id:
                 relationships.append({
-                    "source_label": "User", "source_id": creator_id,
+                    "source_label": "User", "source_id": u_id,
                     "rel_type": "PARTICIPATES_IN",
                     "target_label": "ChatConversation", "target_id": c_id,
                     "tenant_id": t_id
                 })
 
-        # 7. Transform Projects (NM-06) & Approvals (NM-10)
+        # 7. Transform Projects (NM-06) & Approval Requests (NM-10)
         for p in staging_data.get("projects", []):
             p_id = p["id"]
-            creator_id = p.get("created_by_user_id")
-            t_id = p.get("tenant_id") or (user_tenants.get(creator_id, 1) if creator_id else 1)
+            t_id = p.get("tenant_id", 1)
             nodes["Project"].append({
                 "id": p_id,
                 "tenant_id": t_id,
-                "name": p.get("name") or p.get("key") or f"Project {p_id}",
-                "code": p.get("code") or p.get("key", ""),
+                "name": p.get("name") or f"Project {p_id}",
+                "code": p.get("code", ""),
                 "status": p.get("status", "ACTIVE"),
                 "is_deleted": p.get("is_deleted", False)
             })
