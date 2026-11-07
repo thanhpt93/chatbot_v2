@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IQ NFFICE - AI Groupware Chatbot</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f0f2f5;
+      color: #1c1e21;
+      height: 100vh;
+      display: flex;
+    }
+    /* Sidebar */
+    .sidebar {
+      width: 320px;
+      background: #ffffff;
+      border-right: 1px solid #e4e6eb;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #0084ff, #00c6ff);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 20px;
+    }
+    .brand-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #050505;
+    }
+    .brand-subtitle {
+      font-size: 12px;
+      color: #65676b;
+    }
+    .tenant-selector {
+      margin-bottom: 20px;
+    }
+    .tenant-selector label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #65676b;
+      margin-bottom: 6px;
+      display: block;
+    }
+    .tenant-selector select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ccd0d5;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #f7f8fa;
+      outline: none;
+      cursor: pointer;
+    }
+    .stats-card {
+      background: #f7f8fa;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.6;
+      border: 1px solid #e4e6eb;
+      margin-bottom: 20px;
+    }
+    .stats-card h4 {
+      font-size: 13px;
+      margin-bottom: 8px;
+      color: #0084ff;
+    }
+    .quick-queries {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .quick-queries h4 {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #65676b;
+      margin-bottom: 10px;
+    }
+    .quick-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: #f0f2f5;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #050505;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .quick-btn:hover {
+      background: #e4e6eb;
+      border-color: #ccd0d5;
+    }
+    /* Main Chat */
+    .chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #ffffff;
+    }
+    .chat-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid #e4e6eb;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .chat-header-title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: #e7f3ff;
+      color: #0084ff;
+      font-weight: 500;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: #31a24c;
+      border-radius: 50%;
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .message {
+      display: flex;
+      gap: 12px;
+      max-width: 80%;
+    }
+    .message.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+    .message.bot {
+      align-self: flex-start;
+    }
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    .avatar.user {
+      background: #0084ff;
+      color: white;
+    }
+    .avatar.bot {
+      background: #e4e6eb;
+      color: #050505;
+    }
+    .msg-content {
+      padding: 12px 16px;
+      border-radius: 18px;
+      font-size: 14px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .message.user .msg-content {
+      background: #0084ff;
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+    .message.bot .msg-content {
+      background: #f0f2f5;
+      color: #050505;
+      border-bottom-left-radius: 4px;
+    }
+    .msg-meta {
+      font-size: 11px;
+      color: #65676b;
+      margin-top: 4px;
+    }
+    .context-accordion {
+      margin-top: 8px;
+      border: 1px solid #ccd0d5;
+      border-radius: 6px;
+      background: #ffffff;
+      font-size: 12px;
+    }
+    .context-accordion summary {
+      padding: 6px 10px;
+      cursor: pointer;
+      font-weight: 600;
+      color: #0084ff;
+      outline: none;
+    }
+    .context-accordion-body {
+      padding: 8px 10px;
+      background: #f7f8fa;
+      border-top: 1px solid #ccd0d5;
+      color: #4b4c4f;
+      white-space: pre-wrap;
+    }
+    .chat-input-bar {
+      padding: 16px 24px;
+      border-top: 1px solid #e4e6eb;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      background: #ffffff;
+    }
+    .chat-input-bar textarea {
+      flex: 1;
+      resize: none;
+      height: 48px;
+      padding: 12px 16px;
+      border: 1px solid #ccd0d5;
+      border-radius: 24px;
+      font-size: 14px;
+      outline: none;
+      font-family: inherit;
+    }
+    .chat-input-bar textarea:focus {
+      border-color: #0084ff;
+    }
+    .send-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #0084ff;
+      border: none;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .send-btn:hover {
+      background: #0073e6;
+    }
+    .send-btn:disabled {
+      background: #ccd0d5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">IQ</div>
+      <div>
+        <div class="brand-title">IQ NFFICE AI</div>
+        <div class="brand-subtitle">Graph & Vector Knowledge Chatbot</div>
+      </div>
+    </div>
+
+    <div class="tenant-selector">
+      <label for="tenantSelect">Doanh nghiệp (Tenant)</label>
+      <select id="tenantSelect">
+        <option value="1" selected>IQ NFFICE (Tenant #1)</option>
+      </select>
+    </div>
+
+    <div class="stats-card">
+      <h4>Trạng Thái Tri Thức</h4>
+      <div>• <b>Graph Nodes:</b> 6,143 (Nhân viên, Phòng ban, Đơn từ, Tài sản)</div>
+      <div>• <b>Relationships:</b> 8,698 quan hệ</div>
+      <div>• <b>Vector Store:</b> Qdrant Multi-tenant (384-dim)</div>
+      <div>• <b>LLM:</b> Qwen2.5-7B-Instruct-GPTQ-Int4 (vLLM)</div>
+    </div>
+
+    <div class="quick-queries">
+      <h4>Gợi Ý Câu Hỏi</h4>
+      <button class="quick-btn" onclick="askQuick('Công ty có những phòng ban nào và quy mô nhân sự ra sao?')">
+        🏢 Các phòng ban & quy mô nhân sự
+      </button>
+      <button class="quick-btn" onclick="askQuick('Ai là người đã tạo hoặc đề xuất các yêu cầu phê duyệt gần đây?')">
+        📝 Danh sách đơn phê duyệt
+      </button>
+      <button class="quick-btn" onclick="askQuick('Hiện tại công ty có những thiết bị máy chủ GPU hay laptop nào?')">
+        💻 Danh mục tài sản & thiết bị IT
+      </button>
+      <button class="quick-btn" onclick="askQuick('Thông báo mới nhất về kỹ thuật hoặc bảo mật là gì?')">
+        📢 Thông báo nội bộ quan trọng
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Chat Section -->
+  <main class="chat-container">
+    <header class="chat-header">
+      <div class="chat-header-title">Trợ Lý Ảo Doanh Nghiệp IQ NFFICE</div>
+      <div class="status-badge">
+        <span class="status-dot"></span>
+        <span id="llmStatus">vLLM: Sẵn sàng</span>
+      </div>
+    </header>
+
+    <div class="chat-messages" id="messageList">
+      <div class="message bot">
+        <div class="avatar bot">AI</div>
+        <div>
+          <div class="msg-content">
+            Xin chào! Tôi là trợ lý ảo doanh nghiệp <b>IQ NFFICE</b>. Tôi được tích hợp trực tiếp với Đồ thị Tổ chức (Graph Ontology) và Kho dữ liệu trao đổi (Vector DB) của công ty. Tôi có thể hỗ trợ gì cho bạn hôm nay?
+          </div>
+          <div class="msg-meta">Vừa xong</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-input-bar">
+      <textarea id="userInput" placeholder="Nhập câu hỏi về nhân sự, phòng ban, đơn từ hoặc tài sản... (Enter để gửi)" onkeydown="handleKeyDown(event)"></textarea>
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+  </main>
+
+  <script>
+    const messageList = document.getElementById('messageList');
+    const userInput = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const tenantSelect = document.getElementById('tenantSelect');
+
+    function appendMessage(sender, text, sources = null) {
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `message ${sender}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = `avatar ${sender}`;
+      avatar.innerText = sender === 'user' ? 'Tôi' : 'AI';
+
+      const wrapper = document.createElement('div');
+
+      const content = document.createElement('div');
+      content.className = 'msg-content';
+      content.innerHTML = text.replace(/\n/g, '<br>');
+
+      wrapper.appendChild(content);
+
+      if (sources) {
+        const acc = document.createElement('details');
+        acc.className = 'context-accordion';
+        const sum = document.createElement('summary');
+        sum.innerText = '🔍 Nguồn trích xuất từ Graph & Vector DB';
+        const body = document.createElement('div');
+        body.className = 'context-accordion-body';
+        body.innerText = sources;
+        acc.appendChild(sum);
+        acc.appendChild(body);
+        wrapper.appendChild(acc);
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'msg-meta';
+      const now = new Date();
+      meta.innerText = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      wrapper.appendChild(meta);
+
+      msgDiv.appendChild(avatar);
+      msgDiv.appendChild(wrapper);
+
+      messageList.appendChild(msgDiv);
+      messageList.scrollTop = messageList.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const query = userInput.value.trim();
+      if (!query) return;
+
+      appendMessage('user', query);
+      userInput.value = '';
+      sendBtn.disabled = true;
+
+      // Loading bubble
+      const loadingDiv = document.createElement('div');
+      loadingDiv.className = 'message bot';
+      loadingDiv.id = 'tempLoading';
+      loadingDiv.innerHTML = `
+        <div class="avatar bot">AI</div>
+        <div>
+          <div class="msg-content" style="color: #65676b; font-style: italic;">
+            Đang tra cứu Graph Ontology & Vector DB...
+          </div>
+        </div>
+      `;
+      messageList.appendChild(loadingDiv);
+      messageList.scrollTop = messageList.scrollHeight;
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: query,
+            tenant_id: parseInt(tenantSelect.value)
+          })
+        });
+
+        const data = await res.json();
+        const loading = document.getElementById('tempLoading');
+        if (loading) loading.remove();
+
+        if (data.status === 'SUCCESS') {
+          appendMessage('bot', data.response, data.evidence);
+        } else {
+          appendMessage('bot', '⚠️ ' + (data.error || 'Lỗi xử lý phản hồi từ LLM.'));
+        }
+      } catch (err) {
+        const loading = document.getElementById('tempLoading');
+        if (loading) loading.remove();
+        appendMessage('bot', '⚠️ Không thể kết nối đến Chatbot Backend Server: ' + err.message);
+      } finally {
+        sendBtn.disabled = false;
+        userInput.focus();
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    }
+
+    function askQuick(text) {
+      userInput.value = text;
+      sendMessage();
+    }
+  </script>
+</body>
+</html>

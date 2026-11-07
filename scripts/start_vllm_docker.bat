@@ -2,8 +2,8 @@
 REM ================================================================
 REM Quick Launcher for vLLM with Qwen2.5-7B-Instruct-GPTQ-Int4 (Docker)
 REM Highly Optimized for NVIDIA RTX 3060 (12GB VRAM):
-REM - Only ~5.5 GB VRAM utilized
-REM - Leaves 6.5 GB free VRAM for OS & smooth display
+REM - ~5.5 GB VRAM utilized
+REM - Safe KV Cache memory allocation
 REM ================================================================
 
 echo ================================================================
@@ -22,7 +22,8 @@ if %ERRORLEVEL% NEQ 0 (
 echo [INFO] Docker Desktop is running.
 echo [INFO] Launching vLLM container (vllm/vllm-openai:latest)...
 echo [INFO] Model: Qwen/Qwen2.5-7B-Instruct-GPTQ-Int4
-echo [INFO] GPU Memory Utilization: 60%% (~7.2 GB VRAM ceiling, actual ~5.5 GB)
+echo [INFO] GPU Memory Utilization: 70%%
+echo [INFO] Max Context Length: 4096 tokens
 echo ----------------------------------------------------------------
 
 docker run -d --name vllm-qwen ^
@@ -35,8 +36,8 @@ docker run -d --name vllm-qwen ^
   Qwen/Qwen2.5-7B-Instruct-GPTQ-Int4 ^
   --host 0.0.0.0 ^
   --port 8000 ^
-  --gpu-memory-utilization 0.60 ^
-  --max-model-len 8192
+  --gpu-memory-utilization 0.70 ^
+  --max-model-len 4096
 
 if %ERRORLEVEL% EQU 0 (
     echo.
