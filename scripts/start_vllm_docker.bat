@@ -6,6 +6,9 @@ REM - ~5.5 GB VRAM utilized
 REM - Safe KV Cache memory allocation
 REM ================================================================
 
+REM Ensure working directory is project root
+cd /d "%~dp0.."
+
 echo ================================================================
 echo    STARTING VLLM DOCKER: Qwen2.5-7B-Instruct-GPTQ-Int4
 echo ================================================================
